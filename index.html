@@ -88,7 +88,7 @@
 </head>
 <body>
 <header>
-  <h1 id="title">Mesas del casamiento<small>Arrastrá invitados a las mesas · se guarda solo en este navegador</small></h1>
+  <h1 id="title">Mesas del casamiento<small id="sync">Arrastrá invitados a las mesas · se guarda solo en este navegador</small></h1>
   <div class="stats" id="stats"></div>
   <div class="toolbar">
     <button class="btn" onclick="openPaste()">Pegar lista</button>
@@ -100,7 +100,7 @@
     <input type="file" id="fileIn" accept=".json,.csv,.txt" hidden onchange="importFile(this.files[0]);this.value=''">
   </div>
 </header>
- 
+
 <main>
   <aside>
     <h2>Invitados sin mesa</h2>
@@ -112,7 +112,7 @@
     <button class="btn primary" onclick="openGuest()">+ Agregar invitado</button>
     <p class="hint">En compu: arrastrá. En celu: tocá un invitado y después tocá la mesa. Doble clic (o mantener) sobre un invitado para editarlo. El +1 ocupa un lugar más.</p>
   </aside>
- 
+
   <section>
     <div class="row no-print" style="justify-content:space-between">
       <h2 style="flex:0 0 auto">Mesas</h2>
@@ -124,7 +124,7 @@
     <div class="tables" id="tables"></div>
   </section>
 </main>
- 
+
 <dialog id="dGuest">
   <h3 id="dGuestTitle">Invitado</h3>
   <label>Nombre</label>
@@ -148,7 +148,7 @@
     <button class="btn primary" onclick="saveGuest()">Guardar</button>
   </div>
 </dialog>
- 
+
 <dialog id="dPaste">
   <h3>Pegar lista de invitados</h3>
   <p class="hint">Una persona (o pareja) por línea. Podés pegar directo desde Excel o Google Sheets. Columnas, separadas por tab, <b>;</b> o coma:<br>
@@ -163,18 +163,18 @@ Abuela Rosa; no; Familia novia; silla cerca del baño"></textarea>
     <button class="btn primary" onclick="doPaste()">Agregar</button>
   </div>
 </dialog>
- 
+
 <div id="toast"></div>
- 
+
 <script>
 const KEY = 'casamiento-mesas-v1';
 const PALETTE = ['var(--g1)','var(--g2)','var(--g3)','var(--g4)','var(--g5)','var(--g6)','var(--g7)','var(--g8)'];
 let state, selectedId = null, editingId = null, groupFilter = null;
- 
+
 const uid = () => Math.random().toString(36).slice(2,10);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const seats = g => 1 + (g.plusOne ? 1 : 0);
- 
+
 function sample(){
   const t = (n,c,s='redonda') => ({id:uid(),name:n,capacity:c,shape:s});
   const tables = [t('Mesa principal',10,'rectangular'),t('Mesa 1',10),t('Mesa 2',10),t('Mesa 3',10)];
@@ -200,18 +200,80 @@ function sample(){
     ]
   };
 }
- 
+
 function load(){
   try{ state = JSON.parse(localStorage.getItem(KEY)); }catch(e){ state = null; }
   if(!state || !Array.isArray(state.guests)) state = sample();
 }
-function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); queuePush(); }
+
+// ---------- sincronización con el servidor (Vercel + Upstash) ----------
+// Si la página se abre desde un servidor que tiene /api/mesas, todo se comparte entre quienes tengan la contraseña.
+// Si se abre como archivo suelto, funciona igual que antes, solo en este navegador.
+const API = '/api/mesas';
+const online = location.protocol.startsWith('http');
+let remote = { on:false, v:0, pushT:null, busy:false, dirty:false };
+const clave = () => localStorage.getItem(KEY+':clave') || '';
+const quien = () => localStorage.getItem(KEY+':quien') || '';
+function setSync(txt, bad){ const el=document.getElementById('sync'); el.textContent=txt; el.style.color = bad ? 'var(--bad)' : ''; }
+function fmtTime(iso){ try{ return new Date(iso).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+async function api(method, body){
+  const r = await fetch(API, { method, headers:{'Content-Type':'application/json','x-clave':clave()}, body: body?JSON.stringify(body):undefined });
+  let data=null; try{ data = await r.json(); }catch(e){}
+  return { status:r.status, data };
+}
+async function connect(){
+  if(!online) return;
+  for(let intento=0; intento<3; intento++){
+    if(!clave()){ const c = prompt('Contraseña de las mesas (la que configuraron en Vercel):'); if(!c) break; localStorage.setItem(KEY+':clave', c); }
+    let res; try{ res = await api('GET'); }catch(e){ setSync('Sin conexión: los cambios quedan solo en este navegador', true); return; }
+    if(res.status===404){ setSync('Se guarda solo en este navegador'); return; }   // no hay API desplegada
+    if(res.status===401){ localStorage.removeItem(KEY+':clave'); alert('Contraseña incorrecta'); continue; }
+    if(res.status!==200){ setSync((res.data&&res.data.error)||'Error del servidor: se guarda solo acá', true); return; }
+    if(!quien()){ const q = prompt('¿Quién sos? (para saber quién hizo el último cambio)', ''); if(q) localStorage.setItem(KEY+':quien', q.trim()); }
+    remote.on = true;
+    if(res.data && res.data.state){ remote.v = res.data.v; state = res.data.state; localStorage.setItem(KEY, JSON.stringify(state)); render(); showLast(res.data); }
+    else { remote.v = 0; push(); }   // primera vez: sube lo que hay en este navegador
+    setInterval(pull, 15000);
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pull(); });
+    return;
+  }
+  setSync('Sin contraseña: se guarda solo en este navegador', true);
+}
+function showLast(d){ setSync(`Compartido ✓ · último cambio${d.by?' de '+d.by:''} ${d.at?'a las '+fmtTime(d.at):''}`); }
+function queuePush(){ if(!remote.on) return; remote.dirty = true; setSync('Guardando…'); clearTimeout(remote.pushT); remote.pushT = setTimeout(push, 700); }
+async function push(){
+  if(remote.busy){ remote.dirty = true; return; }
+  remote.busy = true; remote.dirty = false;
+  try{
+    const res = await api('PUT', { v: remote.v, state, by: quien() });
+    if(res.status===200){ remote.v = res.data.v; showLast(res.data); }
+    else if(res.status===409 && res.data){
+      remote.v = res.data.v; state = res.data.state; localStorage.setItem(KEY, JSON.stringify(state)); render();
+      toast(`${res.data.by||'Alguien'} cambió algo al mismo tiempo. Cargué su versión: revisá tu último cambio.`); showLast(res.data);
+    } else if(res.status===401){ localStorage.removeItem(KEY+':clave'); setSync('Contraseña vencida: recargá la página', true); remote.on=false; }
+    else { setSync('No se pudo guardar en el servidor, reintento…', true); remote.dirty = true; }
+  }catch(e){ setSync('Sin conexión, reintento…', true); remote.dirty = true; }
+  remote.busy = false;
+  if(remote.dirty){ clearTimeout(remote.pushT); remote.pushT = setTimeout(push, 3000); }
+}
+async function pull(){
+  if(!remote.on || remote.busy || remote.dirty || document.hidden) return;
+  if(document.querySelector('dialog[open]') || document.activeElement?.matches('input,select,textarea')) return;
+  try{
+    const res = await api('GET');
+    if(res.status===200 && res.data && res.data.v !== remote.v){
+      remote.v = res.data.v; state = res.data.state; localStorage.setItem(KEY, JSON.stringify(state)); render(); showLast(res.data);
+      toast(`Actualicé con los cambios${res.data.by?' de '+res.data.by:''}`);
+    }
+  }catch(e){}
+}
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
- 
+
 function groups(){ return [...new Set(state.guests.map(g=>g.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')); }
 function groupColor(gr){ const i = groups().indexOf(gr); return gr && i>=0 ? PALETTE[i % PALETTE.length] : '#f2f2f2'; }
 function used(tid){ return state.guests.filter(g=>g.tableId===tid).reduce((a,g)=>a+seats(g),0); }
- 
+
 function guestHTML(g){
   const sub = [g.plusOne ? (g.plusOneName ? '+ '+g.plusOneName : '+ acompañante') : '', g.group].filter(Boolean).join(' · ');
   return `<div class="guest ${selectedId===g.id?'selected':''}" draggable="true" data-id="${g.id}" style="background:${groupColor(g.group)}">
@@ -221,7 +283,7 @@ function guestHTML(g){
     ${g.tableId?`<button class="x" title="Sacar de la mesa" data-unseat="${g.id}">✕</button>`:''}
   </div>`;
 }
- 
+
 function tableSVG(t, n){
   const cap = Math.max(1, t.capacity), W=150, H=110;
   let shapes='', dots='';
@@ -237,19 +299,19 @@ function tableSVG(t, n){
   }
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${shapes}${dots}<text x="75" y="60" text-anchor="middle" font-size="14" fill="var(--ink)">${n}/${cap}</text></svg>`;
 }
- 
+
 function render(){
   document.getElementById('title').firstChild.textContent = state.title || 'Mesas del casamiento';
   const q = document.getElementById('q').value.trim().toLowerCase();
   const match = g => (!q || [g.name,g.plusOneName,g.group,g.notes].join(' ').toLowerCase().includes(q)) && (!groupFilter || g.group===groupFilter);
- 
+
   // legend
   document.getElementById('legend').innerHTML = groups().map(gr=>`<span class="${groupFilter===gr?'on':''}" data-group="${esc(gr)}" style="background:${groupColor(gr)}">${esc(gr)}</span>`).join('');
- 
+
   // pool
   const pool = state.guests.filter(g=>!g.tableId && match(g)).sort((a,b)=>(a.group||'').localeCompare(b.group||'','es')||a.name.localeCompare(b.name,'es'));
   document.getElementById('pool').innerHTML = pool.map(guestHTML).join('') || '<p class="hint" style="text-align:center">Nadie sin mesa 🎉</p>';
- 
+
   // tables
   document.getElementById('tables').innerHTML = state.tables.map(t=>{
     const gs = state.guests.filter(g=>g.tableId===t.id);
@@ -266,7 +328,7 @@ function render(){
         <span style="flex:1"></span><button class="btn small danger" data-tdel="${t.id}">Borrar</button></div>
     </div>`;
   }).join('');
- 
+
   // stats
   const people = state.guests.reduce((a,g)=>a+seats(g),0);
   const seated = state.guests.filter(g=>g.tableId).reduce((a,g)=>a+seats(g),0);
@@ -279,12 +341,12 @@ function render(){
     <div class="stat ${people-seated?'bad':''}"><b>${people-seated}</b>sin mesa</div>
     <div class="stat ${cap<people?'bad':''}"><b>${cap}</b>lugares en ${state.tables.length} mesas</div>
     ${over?`<div class="stat bad"><b>${over}</b>mesas pasadas</div>`:''}`;
- 
+
   document.getElementById('groupList').innerHTML = groups().map(g=>`<option value="${esc(g)}">`).join('');
 }
- 
+
 function commit(){ save(); render(); }
- 
+
 // ---------- seating ----------
 function seat(gid, tid){
   const g = state.guests.find(x=>x.id===gid); if(!g) return;
@@ -292,13 +354,13 @@ function seat(gid, tid){
   if(g.tableId){ const t = state.tables.find(t=>t.id===tid); if(used(tid) > t.capacity) toast(`Ojo: ${t.name} quedó pasada de lugares`); }
   selectedId = null; commit();
 }
- 
+
 // drag & drop
 document.addEventListener('dragstart', e=>{ const el=e.target.closest?.('.guest'); if(el){ e.dataTransfer.setData('text/plain', el.dataset.id); e.dataTransfer.effectAllowed='move'; }});
 document.addEventListener('dragover', e=>{ const d=e.target.closest('[data-drop]'); if(d){ e.preventDefault(); document.querySelectorAll('.over').forEach(x=>x!==d&&x.classList.remove('over')); d.classList.add('over'); }});
 document.addEventListener('dragleave', e=>{ const d=e.target.closest('[data-drop]'); if(d && !d.contains(e.relatedTarget)) d.classList.remove('over'); });
 document.addEventListener('drop', e=>{ const d=e.target.closest('[data-drop]'); if(d){ e.preventDefault(); d.classList.remove('over'); seat(e.dataTransfer.getData('text/plain'), d.dataset.drop); }});
- 
+
 // clicks (tap-to-seat, edit, table controls)
 document.addEventListener('click', e=>{
   const un = e.target.closest('[data-unseat]'); if(un){ seat(un.dataset.unseat,'pool'); return; }
@@ -312,7 +374,7 @@ document.addEventListener('click', e=>{
 document.addEventListener('dblclick', e=>{ const g=e.target.closest('.guest'); if(g) openGuest(g.dataset.id); });
 let pressT; document.addEventListener('touchstart', e=>{ const g=e.target.closest('.guest'); if(g) pressT=setTimeout(()=>openGuest(g.dataset.id),600); },{passive:true});
 ['touchend','touchmove'].forEach(ev=>document.addEventListener(ev,()=>clearTimeout(pressT),{passive:true}));
- 
+
 document.addEventListener('change', e=>{
   const t = e.target;
   if(t.dataset.tname){ state.tables.find(x=>x.id===t.dataset.tname).name = t.value; commit(); }
@@ -320,7 +382,7 @@ document.addEventListener('change', e=>{
   if(t.dataset.tshape){ state.tables.find(x=>x.id===t.dataset.tshape).shape = t.value; commit(); }
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && selectedId){ selectedId=null; render(); }});
- 
+
 // ---------- tables ----------
 function addTable(){
   const nums = state.tables.map(t=>parseInt((t.name.match(/\d+/)||[0])[0])).filter(n=>!isNaN(n));
@@ -351,7 +413,7 @@ function autoGroup(){
   }
   commit(); toast(left ? `Quedaron ${left} sin lugar: agregá mesas` : 'Listo, todos sentados. Revisalo y ajustá a mano.');
 }
- 
+
 // ---------- guest dialog ----------
 const dGuest = document.getElementById('dGuest'), dPaste = document.getElementById('dPaste');
 function openGuest(id){
@@ -378,7 +440,7 @@ function saveGuest(){
 }
 function deleteGuest(){ if(!confirm('¿Borrar este invitado?')) return; state.guests = state.guests.filter(g=>g.id!==editingId); dGuest.close(); commit(); }
 document.getElementById('gName').addEventListener('keydown', e=>{ if(e.key==='Enter') saveGuest(); });
- 
+
 // ---------- paste / import ----------
 function openPaste(){ document.getElementById('pasteText').value=''; dPaste.showModal(); }
 function parseLine(line){
@@ -399,7 +461,7 @@ function doPaste(){
   if(document.getElementById('pasteReplace').checked){ if(!confirm('Esto borra todos los invitados actuales. ¿Seguro?')) return; state.guests = []; }
   state.guests.push(...gs); dPaste.close(); commit(); toast(`Agregué ${gs.length} invitados`);
 }
- 
+
 function download(name, text, type){
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text],{type})); a.download = name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
@@ -453,7 +515,7 @@ function importFile(file){
   };
   r.readAsText(file);
 }
- 
+
 function resetAll(){
   const opt = prompt('Escribí "vacío" para arrancar sin nada, o "ejemplo" para volver a los datos de ejemplo. (Te conviene guardar una copia antes.)');
   if(!opt) return;
@@ -462,9 +524,8 @@ function resetAll(){
   commit();
 }
 document.getElementById('title').addEventListener('dblclick', ()=>{ const t = prompt('Título', state.title); if(t){ state.title=t; commit(); } });
- 
-load(); render();
+
+load(); render(); connect();
 </script>
 </body>
 </html>
- 
