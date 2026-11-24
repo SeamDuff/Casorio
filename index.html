@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organizador de mesas · Casamiento</title>
+<style>
+  :root{
+    --bg:#faf7f2; --card:#fff; --ink:#2b2622; --muted:#8a8178; --line:#e8e1d7;
+    --accent:#9c6b4f; --accent-soft:#f3e7de; --ok:#5f8a5a; --warn:#c0843a; --bad:#b5483f;
+    --g1:#d9e7f5; --g2:#f6dfe3; --g3:#e2f0dc; --g4:#f7ecd2; --g5:#e9e0f5; --g6:#dff2f0; --g7:#f5e3d6; --g8:#ececec;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Georgia,"Times New Roman",serif;background:var(--bg);color:var(--ink)}
+  button,input,select,textarea{font:inherit;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px}
+  header{padding:18px 24px;border-bottom:1px solid var(--line);background:var(--card);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}
+  h1{margin:0;font-weight:normal;font-size:24px;letter-spacing:.5px}
+  h1 small{display:block;font-size:13px;color:var(--muted);font-family:system-ui,sans-serif;letter-spacing:0}
+  .stats{display:flex;gap:16px;flex-wrap:wrap;font-family:system-ui,sans-serif;font-size:13px}
+  .stat b{display:block;font-size:20px;font-family:Georgia,serif;font-weight:normal}
+  .stat.bad b{color:var(--bad)}
+  .toolbar{display:flex;gap:6px;flex-wrap:wrap}
+  .btn{border:1px solid var(--line);background:var(--card);padding:7px 12px;border-radius:8px;cursor:pointer;color:var(--ink)}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.small{padding:3px 8px;font-size:12px}
+  .btn.danger{color:var(--bad)}
+  main{display:grid;grid-template-columns:340px 1fr;gap:0;min-height:calc(100vh - 80px)}
+  aside{border-right:1px solid var(--line);background:#fdfbf8;padding:16px;display:flex;flex-direction:column;gap:10px}
+  aside h2,section h2{font-weight:normal;font-size:18px;margin:0}
+  .row{display:flex;gap:6px;align-items:center}
+  .row > *{flex:1}
+  input[type=text],input[type=number],select,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:#fff}
+  .pool{flex:1;overflow:auto;border:1px dashed var(--line);border-radius:10px;padding:8px;min-height:120px;background:#fff}
+  .pool.over{background:var(--accent-soft);border-color:var(--accent)}
+  .guest{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;margin-bottom:5px;cursor:grab;border:1px solid rgba(0,0,0,.06);font-family:system-ui,sans-serif;font-size:13px;user-select:none}
+  .guest.selected{outline:2px solid var(--accent)}
+  .guest .n{flex:1;line-height:1.25}
+  .guest .n small{color:#5e5650;display:block;font-size:11px}
+  .tag{font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(0,0,0,.08);white-space:nowrap}
+  .tag.plus{background:var(--accent);color:#fff}
+  .tag.diet{background:#fff;border:1px solid var(--warn);color:var(--warn)}
+  .guest .x{opacity:.4;cursor:pointer;border:none;background:none;font-size:14px;padding:0 2px}
+  .guest .x:hover{opacity:1}
+  section{padding:16px 20px}
+  .tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:12px}
+  .table{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:.15s}
+  .table.over{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .table.full .cap{color:var(--ok)}
+  .table.overflow{border-color:var(--bad)}
+  .table.overflow .cap{color:var(--bad)}
+  .table.target{cursor:pointer;border-style:dashed;border-color:var(--accent)}
+  .thead{display:flex;align-items:center;gap:6px}
+  .thead input{border:none;padding:2px 4px;font-family:Georgia,serif;font-size:16px;background:transparent}
+  .thead input:focus{background:var(--accent-soft)}
+  .cap{font-family:system-ui,sans-serif;font-size:12px;color:var(--muted);white-space:nowrap}
+  .viz{display:flex;justify-content:center}
+  .tguests{min-height:40px}
+  .tfoot{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-family:system-ui,sans-serif;font-size:12px;color:var(--muted)}
+  .tfoot input{width:56px;padding:3px 6px}
+  .tfoot select{width:auto;padding:3px 6px}
+  .hint{font-family:system-ui,sans-serif;font-size:12px;color:var(--muted);line-height:1.4}
+  dialog{border:none;border-radius:14px;padding:20px;max-width:560px;width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  dialog::backdrop{background:rgba(40,30,20,.35)}
+  dialog h3{margin:0 0 10px;font-weight:normal}
+  dialog label{display:block;font-family:system-ui,sans-serif;font-size:12px;color:var(--muted);margin:8px 0 3px}
+  dialog .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+  .chk{display:flex;align-items:center;gap:6px;font-family:system-ui,sans-serif;font-size:13px;margin-top:8px}
+  .chk input{width:auto}
+  .legend{display:flex;flex-wrap:wrap;gap:6px;font-family:system-ui,sans-serif;font-size:11px}
+  .legend span{padding:2px 8px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+  .legend span.on{border-color:var(--ink)}
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:20px;font-family:system-ui,sans-serif;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:50}
+  #toast.show{opacity:1}
+  .print-only{display:none}
+  @media (max-width:800px){ main{grid-template-columns:1fr} aside{border-right:none;border-bottom:1px solid var(--line)} .pool{max-height:300px} }
+  @media print{
+    header .toolbar, aside, .no-print, .tfoot, .guest .x{display:none!important}
+    header{position:static;border:none}
+    main{display:block}
+    body{background:#fff}
+    .tables{grid-template-columns:repeat(3,1fr);gap:10px}
+    .table{break-inside:avoid;border-color:#999}
+    .guest{border:none;padding:2px 0;margin:0;background:none!important;cursor:default}
+    .print-only{display:block}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Mesas del casamiento<small>Arrastrá invitados a las mesas · se guarda solo en este navegador</small></h1>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <button class="btn" onclick="openPaste()">Pegar lista</button>
+    <button class="btn" onclick="exportJSON()">Guardar copia (JSON)</button>
+    <button class="btn" onclick="document.getElementById('fileIn').click()">Abrir copia / CSV</button>
+    <button class="btn" onclick="exportCSV()">Exportar CSV</button>
+    <button class="btn" onclick="window.print()">Imprimir</button>
+    <button class="btn danger" onclick="resetAll()">Empezar de cero</button>
+    <input type="file" id="fileIn" accept=".json,.csv,.txt" hidden onchange="importFile(this.files[0]);this.value=''">
+  </div>
+</header>
+ 
+<main>
+  <aside>
+    <h2>Invitados sin mesa</h2>
+    <div class="row">
+      <input type="text" id="q" placeholder="Buscar…" oninput="render()">
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="pool" id="pool" data-drop="pool"></div>
+    <button class="btn primary" onclick="openGuest()">+ Agregar invitado</button>
+    <p class="hint">En compu: arrastrá. En celu: tocá un invitado y después tocá la mesa. Doble clic (o mantener) sobre un invitado para editarlo. El +1 ocupa un lugar más.</p>
+  </aside>
+ 
+  <section>
+    <div class="row no-print" style="justify-content:space-between">
+      <h2 style="flex:0 0 auto">Mesas</h2>
+      <div class="row" style="flex:0 0 auto;gap:6px">
+        <button class="btn" onclick="autoGroup()" title="Sienta a los que quedan sin mesa, juntando por grupo">Sentar el resto por grupo</button>
+        <button class="btn primary" onclick="addTable()">+ Mesa</button>
+      </div>
+    </div>
+    <div class="tables" id="tables"></div>
+  </section>
+</main>
+ 
+<dialog id="dGuest">
+  <h3 id="dGuestTitle">Invitado</h3>
+  <label>Nombre</label>
+  <input type="text" id="gName">
+  <label class="chk"><input type="checkbox" id="gPlus" onchange="document.getElementById('gPlusWrap').style.display=this.checked?'':'none'"> Viene con +1</label>
+  <div id="gPlusWrap" style="display:none">
+    <label>Nombre del acompañante (si lo sabés)</label>
+    <input type="text" id="gPlusName" placeholder="Acompañante">
+  </div>
+  <label>Grupo / familia</label>
+  <input type="text" id="gGroup" list="groupList" placeholder="Ej: Familia novia, Amigos facu…">
+  <datalist id="groupList"></datalist>
+  <label>Notas (dieta, alergias, niños, etc.)</label>
+  <input type="text" id="gNotes" placeholder="Ej: celíaco, vegetariana, silla para bebé">
+  <label>Mesa</label>
+  <select id="gTable"></select>
+  <div class="actions">
+    <button class="btn danger" id="gDel" onclick="deleteGuest()">Borrar</button>
+    <span style="flex:1"></span>
+    <button class="btn" onclick="dGuest.close()">Cancelar</button>
+    <button class="btn primary" onclick="saveGuest()">Guardar</button>
+  </div>
+</dialog>
+ 
+<dialog id="dPaste">
+  <h3>Pegar lista de invitados</h3>
+  <p class="hint">Una persona (o pareja) por línea. Podés pegar directo desde Excel o Google Sheets. Columnas, separadas por tab, <b>;</b> o coma:<br>
+  <code>Nombre ; +1 ; Grupo ; Notas</code><br>
+  En la columna +1 poné <b>si</b>, <b>1</b> o el nombre del acompañante. También vale escribir <code>Juan Pérez + Ana</code> o <code>Juan Pérez +1</code>.</p>
+  <textarea id="pasteText" rows="10" placeholder="Lucía Gómez; si; Amigos facu; vegetariana
+Martín Díaz + Sofía; ; Familia novio
+Abuela Rosa; no; Familia novia; silla cerca del baño"></textarea>
+  <label class="chk"><input type="checkbox" id="pasteReplace"> Reemplazar todos los invitados actuales</label>
+  <div class="actions">
+    <button class="btn" onclick="dPaste.close()">Cancelar</button>
+    <button class="btn primary" onclick="doPaste()">Agregar</button>
+  </div>
+</dialog>
+ 
+<div id="toast"></div>
+ 
+<script>
+const KEY = 'casamiento-mesas-v1';
+const PALETTE = ['var(--g1)','var(--g2)','var(--g3)','var(--g4)','var(--g5)','var(--g6)','var(--g7)','var(--g8)'];
+let state, selectedId = null, editingId = null, groupFilter = null;
+ 
+const uid = () => Math.random().toString(36).slice(2,10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const seats = g => 1 + (g.plusOne ? 1 : 0);
+ 
+function sample(){
+  const t = (n,c,s='redonda') => ({id:uid(),name:n,capacity:c,shape:s});
+  const tables = [t('Mesa principal',10,'rectangular'),t('Mesa 1',10),t('Mesa 2',10),t('Mesa 3',10)];
+  const G = (name,plusOne,group,notes='',plusOneName='',tableId=null) => ({id:uid(),name,plusOne,plusOneName,group,notes,tableId});
+  return {
+    title:'Mesas del casamiento',
+    tables,
+    guests:[
+      G('Papá y mamá de la novia',true,'Familia novia','','',tables[0].id),
+      G('Papá y mamá del novio',true,'Familia novio','','',tables[0].id),
+      G('Abuela Rosa',false,'Familia novia','sin sal'),
+      G('Tío Carlos',true,'Familia novia','','Marta'),
+      G('Prima Julieta',true,'Familia novia'),
+      G('Hermano del novio',true,'Familia novio','vegetariano','Camila'),
+      G('Tía Graciela',false,'Familia novio'),
+      G('Lucía Gómez',false,'Amigos facu','celíaca'),
+      G('Martín Díaz',true,'Amigos facu','','Sofía'),
+      G('Nico Fernández',false,'Amigos facu'),
+      G('Agus Romero',true,'Amigos fútbol'),
+      G('Pedro Sosa',false,'Amigos fútbol'),
+      G('Vale Torres',true,'Trabajo','vegana'),
+      G('Jefe (Roberto)',true,'Trabajo'),
+    ]
+  };
+}
+ 
+function load(){
+  try{ state = JSON.parse(localStorage.getItem(KEY)); }catch(e){ state = null; }
+  if(!state || !Array.isArray(state.guests)) state = sample();
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
+ 
+function groups(){ return [...new Set(state.guests.map(g=>g.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')); }
+function groupColor(gr){ const i = groups().indexOf(gr); return gr && i>=0 ? PALETTE[i % PALETTE.length] : '#f2f2f2'; }
+function used(tid){ return state.guests.filter(g=>g.tableId===tid).reduce((a,g)=>a+seats(g),0); }
+ 
+function guestHTML(g){
+  const sub = [g.plusOne ? (g.plusOneName ? '+ '+g.plusOneName : '+ acompañante') : '', g.group].filter(Boolean).join(' · ');
+  return `<div class="guest ${selectedId===g.id?'selected':''}" draggable="true" data-id="${g.id}" style="background:${groupColor(g.group)}">
+    <span class="n">${esc(g.name)}${sub?`<small>${esc(sub)}</small>`:''}</span>
+    ${g.notes?`<span class="tag diet" title="${esc(g.notes)}">${esc(g.notes.length>14?g.notes.slice(0,13)+'…':g.notes)}</span>`:''}
+    ${g.plusOne?'<span class="tag plus" title="Ocupa 2 lugares">+1</span>':''}
+    ${g.tableId?`<button class="x" title="Sacar de la mesa" data-unseat="${g.id}">✕</button>`:''}
+  </div>`;
+}
+ 
+function tableSVG(t, n){
+  const cap = Math.max(1, t.capacity), W=150, H=110;
+  let shapes='', dots='';
+  const fill = i => i < n ? (n>cap ? 'var(--bad)' : 'var(--accent)') : '#fff';
+  if(t.shape==='rectangular'){
+    shapes = `<rect x="25" y="35" width="100" height="40" rx="4" fill="var(--accent-soft)" stroke="var(--line)"/>`;
+    const top = Math.ceil(cap/2), bot = cap-top;
+    for(let i=0;i<top;i++) dots += `<circle cx="${25+100*(i+.5)/top}" cy="22" r="7" fill="${fill(i)}" stroke="var(--accent)"/>`;
+    for(let i=0;i<bot;i++) dots += `<circle cx="${25+100*(i+.5)/bot}" cy="88" r="7" fill="${fill(top+i)}" stroke="var(--accent)"/>`;
+  } else {
+    shapes = `<circle cx="75" cy="55" r="30" fill="var(--accent-soft)" stroke="var(--line)"/>`;
+    for(let i=0;i<cap;i++){ const a = -Math.PI/2 + 2*Math.PI*i/cap; dots += `<circle cx="${75+45*Math.cos(a)}" cy="${55+45*Math.sin(a)}" r="7" fill="${fill(i)}" stroke="var(--accent)"/>`; }
+  }
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${shapes}${dots}<text x="75" y="60" text-anchor="middle" font-size="14" fill="var(--ink)">${n}/${cap}</text></svg>`;
+}
+ 
+function render(){
+  document.getElementById('title').firstChild.textContent = state.title || 'Mesas del casamiento';
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const match = g => (!q || [g.name,g.plusOneName,g.group,g.notes].join(' ').toLowerCase().includes(q)) && (!groupFilter || g.group===groupFilter);
+ 
+  // legend
+  document.getElementById('legend').innerHTML = groups().map(gr=>`<span class="${groupFilter===gr?'on':''}" data-group="${esc(gr)}" style="background:${groupColor(gr)}">${esc(gr)}</span>`).join('');
+ 
+  // pool
+  const pool = state.guests.filter(g=>!g.tableId && match(g)).sort((a,b)=>(a.group||'').localeCompare(b.group||'','es')||a.name.localeCompare(b.name,'es'));
+  document.getElementById('pool').innerHTML = pool.map(guestHTML).join('') || '<p class="hint" style="text-align:center">Nadie sin mesa 🎉</p>';
+ 
+  // tables
+  document.getElementById('tables').innerHTML = state.tables.map(t=>{
+    const gs = state.guests.filter(g=>g.tableId===t.id);
+    const n = gs.reduce((a,g)=>a+seats(g),0);
+    const cls = n>t.capacity?'overflow':(n===t.capacity?'full':'');
+    const diets = gs.filter(g=>g.notes).length;
+    return `<div class="table ${cls} ${selectedId?'target':''}" data-drop="${t.id}">
+      <div class="thead"><input value="${esc(t.name)}" data-tname="${t.id}"><span class="cap">${n}/${t.capacity}${n>t.capacity?' ¡pasada!':''}</span></div>
+      <div class="viz">${tableSVG(t,n)}</div>
+      <div class="tguests">${gs.map(guestHTML).join('') || '<p class="hint" style="text-align:center">Soltá invitados acá</p>'}</div>
+      ${diets?`<div class="hint">⚠ ${diets} con notas de comida/otras</div>`:''}
+      <div class="tfoot">Lugares <input type="number" min="1" max="30" value="${t.capacity}" data-tcap="${t.id}">
+        <select data-tshape="${t.id}"><option value="redonda" ${t.shape!=='rectangular'?'selected':''}>Redonda</option><option value="rectangular" ${t.shape==='rectangular'?'selected':''}>Rectangular</option></select>
+        <span style="flex:1"></span><button class="btn small danger" data-tdel="${t.id}">Borrar</button></div>
+    </div>`;
+  }).join('');
+ 
+  // stats
+  const people = state.guests.reduce((a,g)=>a+seats(g),0);
+  const seated = state.guests.filter(g=>g.tableId).reduce((a,g)=>a+seats(g),0);
+  const cap = state.tables.reduce((a,t)=>a+Number(t.capacity),0);
+  const over = state.tables.filter(t=>used(t.id)>t.capacity).length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><b>${state.guests.length}</b>invitaciones</div>
+    <div class="stat"><b>${people}</b>personas</div>
+    <div class="stat"><b>${seated}</b>sentadas</div>
+    <div class="stat ${people-seated?'bad':''}"><b>${people-seated}</b>sin mesa</div>
+    <div class="stat ${cap<people?'bad':''}"><b>${cap}</b>lugares en ${state.tables.length} mesas</div>
+    ${over?`<div class="stat bad"><b>${over}</b>mesas pasadas</div>`:''}`;
+ 
+  document.getElementById('groupList').innerHTML = groups().map(g=>`<option value="${esc(g)}">`).join('');
+}
+ 
+function commit(){ save(); render(); }
+ 
+// ---------- seating ----------
+function seat(gid, tid){
+  const g = state.guests.find(x=>x.id===gid); if(!g) return;
+  g.tableId = (tid==='pool' || !tid) ? null : tid;
+  if(g.tableId){ const t = state.tables.find(t=>t.id===tid); if(used(tid) > t.capacity) toast(`Ojo: ${t.name} quedó pasada de lugares`); }
+  selectedId = null; commit();
+}
+ 
+// drag & drop
+document.addEventListener('dragstart', e=>{ const el=e.target.closest?.('.guest'); if(el){ e.dataTransfer.setData('text/plain', el.dataset.id); e.dataTransfer.effectAllowed='move'; }});
+document.addEventListener('dragover', e=>{ const d=e.target.closest('[data-drop]'); if(d){ e.preventDefault(); document.querySelectorAll('.over').forEach(x=>x!==d&&x.classList.remove('over')); d.classList.add('over'); }});
+document.addEventListener('dragleave', e=>{ const d=e.target.closest('[data-drop]'); if(d && !d.contains(e.relatedTarget)) d.classList.remove('over'); });
+document.addEventListener('drop', e=>{ const d=e.target.closest('[data-drop]'); if(d){ e.preventDefault(); d.classList.remove('over'); seat(e.dataTransfer.getData('text/plain'), d.dataset.drop); }});
+ 
+// clicks (tap-to-seat, edit, table controls)
+document.addEventListener('click', e=>{
+  const un = e.target.closest('[data-unseat]'); if(un){ seat(un.dataset.unseat,'pool'); return; }
+  const del = e.target.closest('[data-tdel]'); if(del){ delTable(del.dataset.tdel); return; }
+  const lg = e.target.closest('[data-group]'); if(lg){ groupFilter = groupFilter===lg.dataset.group?null:lg.dataset.group; render(); return; }
+  const g = e.target.closest('.guest');
+  if(g){ selectedId = selectedId===g.dataset.id ? null : g.dataset.id; render(); return; }
+  const d = e.target.closest('[data-drop]');
+  if(d && selectedId && !e.target.closest('input,select,button')){ seat(selectedId, d.dataset.drop); return; }
+});
+document.addEventListener('dblclick', e=>{ const g=e.target.closest('.guest'); if(g) openGuest(g.dataset.id); });
+let pressT; document.addEventListener('touchstart', e=>{ const g=e.target.closest('.guest'); if(g) pressT=setTimeout(()=>openGuest(g.dataset.id),600); },{passive:true});
+['touchend','touchmove'].forEach(ev=>document.addEventListener(ev,()=>clearTimeout(pressT),{passive:true}));
+ 
+document.addEventListener('change', e=>{
+  const t = e.target;
+  if(t.dataset.tname){ state.tables.find(x=>x.id===t.dataset.tname).name = t.value; commit(); }
+  if(t.dataset.tcap){ state.tables.find(x=>x.id===t.dataset.tcap).capacity = Math.max(1, parseInt(t.value)||1); commit(); }
+  if(t.dataset.tshape){ state.tables.find(x=>x.id===t.dataset.tshape).shape = t.value; commit(); }
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && selectedId){ selectedId=null; render(); }});
+ 
+// ---------- tables ----------
+function addTable(){
+  const nums = state.tables.map(t=>parseInt((t.name.match(/\d+/)||[0])[0])).filter(n=>!isNaN(n));
+  const cap = state.tables.length ? state.tables[state.tables.length-1].capacity : 10;
+  state.tables.push({id:uid(), name:'Mesa '+((Math.max(0,...nums))+1), capacity:cap, shape:'redonda'}); commit();
+}
+function delTable(id){
+  const t = state.tables.find(x=>x.id===id); const n = state.guests.filter(g=>g.tableId===id).length;
+  if(n && !confirm(`¿Borrar ${t.name}? Los ${n} invitados vuelven a "sin mesa".`)) return;
+  state.guests.forEach(g=>{ if(g.tableId===id) g.tableId=null; });
+  state.tables = state.tables.filter(x=>x.id!==id); commit();
+}
+function autoGroup(){
+  // Sienta a los que no tienen mesa: primero grupos grandes, tratando de que un grupo quede junto.
+  const free = state.guests.filter(g=>!g.tableId);
+  if(!free.length) return toast('No queda nadie sin mesa');
+  const byGroup = {}; free.forEach(g=>(byGroup[g.group||'(sin grupo)'] ||= []).push(g));
+  const order = Object.values(byGroup).sort((a,b)=>b.reduce((s,g)=>s+seats(g),0)-a.reduce((s,g)=>s+seats(g),0));
+  let left = 0;
+  for(const grp of order){
+    for(const g of grp){
+      // preferir mesa donde ya hay alguien del mismo grupo
+      const fits = state.tables.filter(t=>t.capacity-used(t.id) >= seats(g));
+      const same = fits.filter(t=>state.guests.some(x=>x.tableId===t.id && x.group===g.group));
+      const pick = same[0] || fits.sort((a,b)=>(b.capacity-used(b.id))-(a.capacity-used(a.id)))[0];
+      if(pick) g.tableId = pick.id; else left++;
+    }
+  }
+  commit(); toast(left ? `Quedaron ${left} sin lugar: agregá mesas` : 'Listo, todos sentados. Revisalo y ajustá a mano.');
+}
+ 
+// ---------- guest dialog ----------
+const dGuest = document.getElementById('dGuest'), dPaste = document.getElementById('dPaste');
+function openGuest(id){
+  editingId = id || null;
+  const g = id ? state.guests.find(x=>x.id===id) : {name:'',plusOne:false,plusOneName:'',group:groupFilter||'',notes:'',tableId:null};
+  document.getElementById('dGuestTitle').textContent = id ? 'Editar invitado' : 'Nuevo invitado';
+  document.getElementById('gName').value = g.name;
+  document.getElementById('gPlus').checked = g.plusOne;
+  document.getElementById('gPlusWrap').style.display = g.plusOne?'':'none';
+  document.getElementById('gPlusName').value = g.plusOneName||'';
+  document.getElementById('gGroup').value = g.group||'';
+  document.getElementById('gNotes').value = g.notes||'';
+  document.getElementById('gTable').innerHTML = '<option value="">Sin mesa</option>' + state.tables.map(t=>`<option value="${t.id}" ${g.tableId===t.id?'selected':''}>${esc(t.name)} (${used(t.id)}/${t.capacity})</option>`).join('');
+  document.getElementById('gDel').style.display = id?'':'none';
+  dGuest.showModal(); document.getElementById('gName').focus();
+}
+function saveGuest(){
+  const name = document.getElementById('gName').value.trim(); if(!name) return toast('Falta el nombre');
+  const data = { name, plusOne:document.getElementById('gPlus').checked, plusOneName:document.getElementById('gPlusName').value.trim(),
+    group:document.getElementById('gGroup').value.trim(), notes:document.getElementById('gNotes').value.trim(), tableId:document.getElementById('gTable').value||null };
+  if(!data.plusOne) data.plusOneName='';
+  if(editingId) Object.assign(state.guests.find(x=>x.id===editingId), data); else state.guests.push({id:uid(),...data});
+  dGuest.close(); commit();
+}
+function deleteGuest(){ if(!confirm('¿Borrar este invitado?')) return; state.guests = state.guests.filter(g=>g.id!==editingId); dGuest.close(); commit(); }
+document.getElementById('gName').addEventListener('keydown', e=>{ if(e.key==='Enter') saveGuest(); });
+ 
+// ---------- paste / import ----------
+function openPaste(){ document.getElementById('pasteText').value=''; dPaste.showModal(); }
+function parseLine(line){
+  let cols = line.includes('\t') ? line.split('\t') : line.includes(';') ? line.split(';') : line.split(',');
+  cols = cols.map(c=>c.trim());
+  let [name='', plus='', group='', notes=''] = cols;
+  let plusOne = false, plusOneName = '';
+  const m = name.match(/^(.*?)\s*\+\s*(.*)$/);
+  if(m){ name = m[1].trim(); plusOne = true; if(m[2] && m[2]!=='1') plusOneName = m[2].trim(); }
+  const p = plus.toLowerCase();
+  if(p && !['no','0','n','false','-'].includes(p)){ plusOne = true; if(!['si','sí','1','s','x','yes','true','+1'].includes(p)) plusOneName = plus; }
+  return name ? {id:uid(), name, plusOne, plusOneName, group, notes, tableId:null} : null;
+}
+function doPaste(){
+  const lines = document.getElementById('pasteText').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(lines.length && /^nombre/i.test(lines[0])) lines.shift();
+  const gs = lines.map(parseLine).filter(Boolean);
+  if(document.getElementById('pasteReplace').checked){ if(!confirm('Esto borra todos los invitados actuales. ¿Seguro?')) return; state.guests = []; }
+  state.guests.push(...gs); dPaste.close(); commit(); toast(`Agregué ${gs.length} invitados`);
+}
+ 
+function download(name, text, type){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text],{type})); a.download = name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+const stamp = () => new Date().toISOString().slice(0,10);
+function exportJSON(){ download(`mesas-casamiento-${stamp()}.json`, JSON.stringify(state,null,2), 'application/json'); }
+function csvCell(v){ v = String(v ?? ''); return /[",;\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function exportCSV(){
+  const rows = [['Nombre','+1','Acompañante','Grupo','Notas','Mesa','Lugares']];
+  const tname = id => (state.tables.find(t=>t.id===id)||{}).name || '';
+  [...state.guests].sort((a,b)=>tname(a.tableId).localeCompare(tname(b.tableId),'es',{numeric:true})).forEach(g=>rows.push([g.name,g.plusOne?'si':'no',g.plusOneName,g.group,g.notes,tname(g.tableId),seats(g)]));
+  download(`invitados-mesas-${stamp()}.csv`, '﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\n'), 'text/csv');
+}
+function parseCSV(text){
+  const rows=[]; let row=[], cell='', q=false;
+  const sep = (text.split('\n')[0].match(/;/g)||[]).length > (text.split('\n')[0].match(/,/g)||[]).length ? ';' : ',';
+  for(let i=0;i<text.length;i++){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; } else cell+=c; }
+    else if(c==='"') q=true; else if(c===sep){row.push(cell);cell='';} else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell='';} else if(c!=='\r') cell+=c; }
+  if(cell||row.length){row.push(cell);rows.push(row);} return rows;
+}
+function importFile(file){
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    const text = String(r.result).replace(/^﻿/,'');
+    try{
+      if(file.name.endsWith('.json')){
+        const s = JSON.parse(text); if(!Array.isArray(s.guests)||!Array.isArray(s.tables)) throw 0;
+        if(!confirm('Esto reemplaza todo lo actual por la copia. ¿Seguir?')) return;
+        state = s; commit(); toast('Copia cargada');
+      } else {
+        const rows = parseCSV(text).filter(r=>r.some(c=>c.trim()));
+        const head = rows[0].map(h=>h.trim().toLowerCase());
+        const idx = k => head.findIndex(h=>h.startsWith(k));
+        const hasHead = idx('nombre')>=0;
+        const I = hasHead ? {n:idx('nombre'),p:idx('+1'),a:idx('acomp'),g:idx('grupo'),o:idx('nota'),m:idx('mesa')} : {n:0,p:1,a:-1,g:2,o:3,m:-1};
+        const body = hasHead ? rows.slice(1) : rows;
+        const replace = confirm('¿Reemplazar los invitados actuales? (Aceptar = reemplazar, Cancelar = sumar a la lista)');
+        if(replace) state.guests = [];
+        let n=0;
+        body.forEach(r=>{
+          const get = i => i>=0 ? (r[i]||'').trim() : '';
+          const g = parseLine([get(I.n), get(I.a) || get(I.p), get(I.g), get(I.o)].join('\t')); if(!g) return;
+          const mesa = get(I.m);
+          if(mesa){ let t = state.tables.find(t=>t.name.toLowerCase()===mesa.toLowerCase()); if(!t){ t={id:uid(),name:mesa,capacity:10,shape:'redonda'}; state.tables.push(t);} g.tableId=t.id; }
+          state.guests.push(g); n++;
+        });
+        commit(); toast(`Importé ${n} invitados`);
+      }
+    }catch(e){ alert('No pude leer el archivo. ¿Es un JSON guardado desde acá o un CSV?'); }
+  };
+  r.readAsText(file);
+}
+ 
+function resetAll(){
+  const opt = prompt('Escribí "vacío" para arrancar sin nada, o "ejemplo" para volver a los datos de ejemplo. (Te conviene guardar una copia antes.)');
+  if(!opt) return;
+  if(opt.toLowerCase().startsWith('vac')) state = {title:state.title, guests:[], tables:[{id:uid(),name:'Mesa 1',capacity:10,shape:'redonda'}]};
+  else if(opt.toLowerCase().startsWith('ej')) state = sample(); else return;
+  commit();
+}
+document.getElementById('title').addEventListener('dblclick', ()=>{ const t = prompt('Título', state.title); if(t){ state.title=t; commit(); } });
+ 
+load(); render();
+</script>
+</body>
+</html>
+ 
